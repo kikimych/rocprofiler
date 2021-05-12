@@ -33,7 +33,7 @@ THE SOFTWARE.
 
 void thread_fun(const int kiter, const int diter, const uint32_t agents_number) {
   const AgentInfo* agent_info[agents_number];
-  hsa_queue_t* queue[agents_number];
+  std::vector<std::unique_ptr<hsa_queue_t, decltype(&hsa_queue_destroy)>> queue;
   HsaRsrcFactory* rsrc = &HsaRsrcFactory::Instance();
 
   for (uint32_t n = 0; n < agents_number; ++n) {
@@ -42,7 +42,8 @@ void thread_fun(const int kiter, const int diter, const uint32_t agents_number) 
       fprintf(stderr, "AgentInfo failed\n");
       abort();
     }
-    if (rsrc->CreateQueue(agent_info[n], 128, &queue[n]) == false) {
+    queue.emplace_back(rsrc->CreateQueue(agent_info[n], 128), &hsa_queue_destroy);
+    if (!queue.back()) {
       fprintf(stderr, "CreateQueue failed\n");
       abort();
     }
@@ -51,12 +52,8 @@ void thread_fun(const int kiter, const int diter, const uint32_t agents_number) 
   for (int i = 0; i < kiter; ++i) {
     for (uint32_t n = 0; n < agents_number; ++n) {
       // RunKernel<DummyKernel, TestAql>(0, NULL, agent_info[n], queue[n], diter);
-      RunKernel<SimpleConvolution, TestAql>(0, NULL, agent_info[n], queue[n], diter);
+      RunKernel<SimpleConvolution, TestAql>(0, NULL, agent_info[n], queue[n].get(), diter);
     }
-  }
-
-  for (uint32_t n = 0; n < agents_number; ++n) {
-    hsa_queue_destroy(queue[n]);
   }
 }
 
